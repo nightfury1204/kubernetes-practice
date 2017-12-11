@@ -1,0 +1,20 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: hello-server-deployment
+spec:
+  selector:
+    matchLabels:
+      app: hello-server
+  template:
+    metadata:
+      labels:
+        app: hello-server
+    spec:
+      containers:
+      - name: hello-server
+        args:
+        - serve
+        image: nightfury1204/hello_server
+        ports:
+        - containerPort: 8080
