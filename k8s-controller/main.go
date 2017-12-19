@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+
 	home := homedir.HomeDir()
 
 	rootCmd := &cobra.Command{

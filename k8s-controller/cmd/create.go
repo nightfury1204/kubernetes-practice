@@ -25,7 +25,6 @@ import (
 	"github.com/golang/glog"
 
 	apiv1 "k8s.io/api/core/v1"
-	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -36,6 +35,11 @@ import (
 )
 
 var Kubeconfig string
+
+type PodOpInfo struct {
+	action string
+	key string
+}
 
 type Controller struct {
 	indexer  cache.Indexer
@@ -60,23 +64,23 @@ func (c *Controller) processNextItem() bool {
 
 	defer c.queue.Done(key)
 
-	err := c.syncToStdout(key.(string))
+	err := c.syncToStdout(key.(*PodOpInfo))
 
 	c.handleErr(err, key)
 	return true
 }
 
-func (c *Controller) syncToStdout(key string) error {
-	obj, exists, err := c.indexer.GetByKey(key)
+func (c *Controller) syncToStdout(key *PodOpInfo) error {
+	obj, exists, err := c.indexer.GetByKey(key.key)
 	if err != nil {
-		glog.Errorf("Fetching object with key %s from store failed with %v", key, err)
+		glog.Errorf("Fetching object with key %s from store failed with %v", key.key, err)
 		return err
 	}
 
 	if !exists {
-		fmt.Printf("Pod %s does not exist anymore\n", key)
+		fmt.Printf("Pod %s does not exist anymore\n", key.key)
 	} else {
-		fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*apiv1.Pod).GetName())
+		fmt.Printf("Action: %s operation, Pod: %s, status : %s\n",key.action, obj.(*apiv1.Pod).GetName())
 	}
 	return nil
 }
@@ -99,7 +103,7 @@ func (c *Controller) handleErr(err error, key interface{}) {
 	glog.Infof("Dropping pod %q out of the queue: %v", key, err)
 }
 
-func (c *Controller) Run(threadiness int, stopCh chan struct{}) {
+func (c *Controller) Run(stopCh chan struct{}) {
 	defer runtime.HandleCrash()
 
 	defer c.queue.ShutDown()
@@ -147,36 +151,29 @@ var CreateCmd = &cobra.Command{
 			AddFunc: func(obj interface{}) {
 				key, err := cache.MetaNamespaceKeyFunc(obj)
 				if err == nil {
-					queue.Add(key)
+					queue.Add(&PodOpInfo{"Add",key})
 				}
 			},
 			UpdateFunc: func(old interface{}, new interface{}) {
 				key, err := cache.MetaNamespaceKeyFunc(new)
 				if err == nil {
-					queue.Add(key)
+					queue.Add(&PodOpInfo{"Update",key})
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 				if err == nil {
-					queue.Add(key)
+					queue.Add(&PodOpInfo{"Delete",key})
 				}
 			},
 		}, cache.Indexers{})
 
 		controller := NewController(queue, indexer, informer)
 
-		indexer.Add(&apiv1.Pod{
-			ObjectMeta: metaV1.ObjectMeta{
-				Name:      "mypod",
-				Namespace: apiv1.NamespaceDefault,
-			},
-		})
-
 		// Now let's start the controller
 		stop := make(chan struct{})
 		defer close(stop)
-		go controller.Run(1, stop)
+		go controller.Run(stop)
 
 		// Wait forever
 		select {}
