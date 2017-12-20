@@ -64,23 +64,23 @@ func (c *Controller) processNextItem() bool {
 
 	defer c.queue.Done(key)
 
-	err := c.syncToStdout(key.(*PodOpInfo))
+	err := c.syncToStdout(key.(string))
 
 	c.handleErr(err, key)
 	return true
 }
 
-func (c *Controller) syncToStdout(key *PodOpInfo) error {
-	obj, exists, err := c.indexer.GetByKey(key.key)
+func (c *Controller) syncToStdout(key string) error {
+	obj, exists, err := c.indexer.GetByKey(key)
 	if err != nil {
-		glog.Errorf("Fetching object with key %s from store failed with %v", key.key, err)
+		glog.Errorf("Fetching object with key %s from store failed with %v", key, err)
 		return err
 	}
 
 	if !exists {
-		fmt.Printf("Pod %s does not exist anymore\n", key.key)
+		fmt.Printf("Pod %s does not exist anymore\n", key)
 	} else {
-		fmt.Printf("Action: %s operation, Pod: %s, status : %s\n",key.action, obj.(*apiv1.Pod).GetName())
+		fmt.Printf("Syn/add/update operation, Pod: %s\n",obj.(*apiv1.Pod).GetName())
 	}
 	return nil
 }
@@ -151,19 +151,19 @@ var CreateCmd = &cobra.Command{
 			AddFunc: func(obj interface{}) {
 				key, err := cache.MetaNamespaceKeyFunc(obj)
 				if err == nil {
-					queue.Add(&PodOpInfo{"Add",key})
+					queue.Add(key)
 				}
 			},
 			UpdateFunc: func(old interface{}, new interface{}) {
 				key, err := cache.MetaNamespaceKeyFunc(new)
 				if err == nil {
-					queue.Add(&PodOpInfo{"Update",key})
+					queue.Add(key)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 				if err == nil {
-					queue.Add(&PodOpInfo{"Delete",key})
+					queue.Add(key)
 				}
 			},
 		}, cache.Indexers{})
